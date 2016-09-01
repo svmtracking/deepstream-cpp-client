@@ -1,0 +1,12 @@
+[submodule "src/3rdparty/cedar"]
+	path = src/3rdparty/cedar
+	url = https://github.com/KrishnaPG/cedar.git
+[submodule "src/3rdparty/libuv"]
+	path = src/3rdparty/libuv
+	url = https://github.com/libuv/libuv.git
+[submodule "src/3rdparty/g3log"]
+	path = src/3rdparty/g3log
+	url = https://github.com/KjellKod/g3log.git
+[submodule "src/3rdparty/cpp.react"]
+	path = src/3rdparty/cpp.react
+	url = https://github.com/schlangster/cpp.react.git
