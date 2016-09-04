@@ -40,7 +40,7 @@ set_compiler_options()
 find_path(LIBUV_INCLUDE_DIR uv.h)
 find_library(LIBUV_LIBRARY NAMES uv uv1)
 
-ADD_SUBDIRECTORY(src/3rdparty/cpp.react)
+# ADD_SUBDIRECTORY(src/3rdparty/cpp.react)
 ADD_SUBDIRECTORY(src/3rdparty/g3log)
 
 #################################
@@ -49,12 +49,22 @@ ADD_SUBDIRECTORY(src/3rdparty/g3log)
 set(SrcDir ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(CedarDir ${SrcDir}/3rdparty/cedar)
 
-include_directories( "include" "src" ${CedarDir} ${LIBUV_INCLUDE_DIR})
+SET(DSCPPClient_INCLUDE_DIRS 
+		${CMAKE_CURRENT_SOURCE_DIR}/include 
+		${SrcDir}
+		${CedarDir}
+		${LIBUV_INCLUDE_DIR})
+
+include_directories(${DSCPPClient_INCLUDE_DIRS})
 						
 SET(DSCPPClient_HEADERS	
-	${CedarDir}/cedarpp.h)
+	${CedarDir}/cedarpp.h
+	${SrcDir}/bufPool.h
+	${SrcDir}/trie_array.h
+	${CMAKE_CURRENT_SOURCE_DIR}/include/dsclientbase.h)
 SET(DSCPPClient_SOURCES 
-	${SrcDir}/client.cpp)
+	${SrcDir}/libuv-network.cpp
+	${SrcDir}/dsclientbase.cpp)
 
 ADD_LIBRARY(dscppclient STATIC ${DSCPPClient_HEADERS} ${DSCPPClient_SOURCES})
 
@@ -62,14 +72,16 @@ set_target_properties(dscppclient PROPERTIES
 							COMPILE_DEFINITIONS "${TARGET_COMPILE_DEFS}"
 							COMPILE_FLAGS "${TARGET_COMPILE_FLAGS}")
 
-target_link_libraries(dscppclient LINK_PUBLIC ${LIBUV_LIBRARY})
-
 if (UNIX)
-	target_link_libraries (dscppclient LINK_PUBLIC pthread)
+	set (DSCPPClient_Dependencies LINK_PUBLIC pthread ${LIBUV_LIBRARY})
 endif()
 if (MSVC)
-	target_link_libraries (dscppclient LINK_PUBLIC ws2_32.lib Psapi.lib IPHLPAPI.lib Userenv.lib)
+	set (DSCPPClient_Dependencies LINK_PUBLIC ws2_32.lib Psapi.lib IPHLPAPI.lib Userenv.lib ${LIBUV_LIBRARY})
 endif()
+
+target_link_libraries(dscppclient ${DSCPPClient_Dependencies})
+
+SET(DSCPPClient_LIBRARIES dscppclient ${DSCPPClient_Dependencies})
 
 install(TARGETS dscppclient RUNTIME DESTINATION bin COMPONENT HelperApps  
 							LIBRARY DESTINATION bin COMPONENT HelperApps  

@@ -1,17 +1,11 @@
+/*
+	Copyright (c) 2016 Cenacle Research India Private Limited
+*/
 
-
-#include <iostream>
-#include <sstream>
-#include <iomanip>
-#include <signal.h>
-#include "g2log-timer.h"
-
-#include "uv.h"
+#include "dsclientbase.h"
+#include "bufPool.h"
 #include "trie_array.h"
-
-#if defined(DEBUG) || defined(_DEBUG)
-#define TRACK_MEMORY 1
-#endif
+#include "g2log-timer.h"
 
 #if defined(WIN32) || defined(_WIN32)
 #define close(a) closesocket(a)
@@ -23,92 +17,11 @@ inline std::string getTimestamp()
 	return g2::put_time(&t1, "%c");
 }
 
-#include <deque>
 #include <map>
 #include <algorithm>
 #include <vector>
-#include <cassert>
 
-template<typename T>
-struct bufPoolT
-{
-protected:
-	inline bufPoolT()
-	{		
-	}
-	inline ~bufPoolT()
-	{
-#if TRACK_MEMORY
-		 assert(inuseQ.size() <= 0);
-#endif
-		for (T* obj : freeQ)
-		{
-			free(obj);
-		}
-	}
-public:
-	static inline bufPoolT& getObject()
-	{
-		static bufPoolT obj;
-		return obj;
-	}
-public:
-	template<class... Args>
-	inline T* acquire(Args&&... args)
-	{
-		T* pBuf = nullptr;
-		if (!freeQ.empty())
-		{
-			pBuf = freeQ.front();
-			freeQ.pop_front();
-		}
-		else	// no free buffer available - rely on the OS
-		{
-			pBuf = (T*) malloc(sizeof(T));
-		}	
-		// reconstruct the object in-place
-		new (pBuf) T(std::forward<Args>(args)...);
-#if TRACK_MEMORY
-		inuseQ.push_back(pBuf);
-#endif
-		return pBuf;
-	}
 
-	inline void release(T* pBuf)
-	{
-		pBuf->~T();
-		freeQ.push_back(pBuf);
-#if TRACK_MEMORY
-		auto foundIter = std::find(inuseQ.cbegin(), inuseQ.cend(), pBuf);
-		if (foundIter != inuseQ.cend())
-			inuseQ.erase(foundIter);
-#endif
-	}
-protected:
-	std::deque<T*> freeQ;
-#if TRACK_MEMORY
-	std::deque<T*> inuseQ;
-#endif
-};
-
-struct bufPool
-{
-	template<typename T, class... Args>
-	inline static T* acquire(Args&&... args)
-	{
-		return bufPoolT<T>::getObject().acquire(std::forward<Args>(args)...);
-	}
-	template<typename T>
-	inline static void release(T* buf)
-	{
-		bufPoolT<T>::getObject().release(buf);
-	}
-};
-
-#define _NEW(type)					bufPoolT<type>::getObject().acquire()
-#define _DELETE(ptr)				bufPool::release(ptr)
-#define _NEW1(type, arg1)			bufPoolT<type>::getObject().acquire(arg1)
-#define _NEW2(type, arg1, arg2)		bufPoolT<type>::getObject().acquire(arg1, arg2)
 
 enum Constants { RECV_BUF_SIZE = 8192, HTTP_MAX_HEADER_COUNT = 24  };
 
@@ -157,14 +70,14 @@ SOCKET server_listen(const char* szHost, int port)
 	sprintf(buf, "%d", port);
 
 	int err = getaddrinfo(szHost, buf, &hints, &pAddrInfo);
-	if (!err) 
+	if (!err)
 	{
 		SOCKET listenFd = socket(pAddrInfo->ai_family, pAddrInfo->ai_socktype, pAddrInfo->ai_protocol);
 		// Make socket as non-blocking
 		set_nonblocking(listenFd);
 		// set SO_REUSEADDR so that it can be bound without waiting for any previously bound sockets to be closed
 		set_addrreuse(listenFd);
-		// Bind and Listen
+		// Bind and Listen for Servers
 		if (!bind(listenFd, pAddrInfo->ai_addr, pAddrInfo->ai_addrlen) && !listen(listenFd, gConfigOptions.nListenBacklog))
 		{
 			result = listenFd;
@@ -277,7 +190,7 @@ struct _client
 			"Accept-Ranges: bytes\n"
 			"Connection: close\n"
 			"\n"
-			"sdfkjsdnbfkjbsf";
+			"Hello World!!  ";
 
 		send(pClient->clientFd, http_response, strlen(http_response), 0);
 
@@ -360,11 +273,11 @@ void setup_signal_handlers(void)
 }
 
 
-
-int main()
+/* sample main function for server */
+void serverMain()
 {
 	setup_signal_handlers();
-	
+
 	gServer.uvLoop = uv_default_loop();
 	gServer.listenFd = server_listen(NULL, 8080);
 	gServer.listenPoll = start_accepting(gServer.listenFd, gServer.uvLoop, acceptHandler);

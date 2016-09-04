@@ -1,6 +1,8 @@
 #ifndef _TRIE_ARRAY_H__Guid__F3C84037_D677_4A13_8D9F_CBA6FE1F5944___
 #define _TRIE_ARRAY_H__Guid__F3C84037_D677_4A13_8D9F_CBA6FE1F5944___
 
+#pragma warning( disable : 4800) // ignore performance warning: forcing value to bool 'true' or 'false'
+
 #include <vector>
 #include <algorithm>
 #include <map>
@@ -44,7 +46,7 @@ struct trie_hash
 protected:
 	TRIE m_trie;
 public:
-	/// <sumary>
+	/// <summary>
 	/// Returns the hash for a given string.
 	///	 + If a hash value has been specified manually earlier, then it will be returned.
 	///  + If no hash was specified earlier, a new hash will be calculate and returned.
