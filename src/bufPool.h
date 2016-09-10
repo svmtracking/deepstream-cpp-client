@@ -89,7 +89,12 @@ protected:
 
 // bufPoolChunk allocates memory of any size. Internally it rounds up sizes
 // to some fixed numbers and maintains separate queues for each size. Unlike
-// bufPoolT this does not construct any objects on the allocated memory.
+// bufPoolT, this does not construct any objects on the allocated memory.
+// Each allocated chunk of requested size is prepended with a size variable
+// that indicates which size-queue this chunk belongs to. Caller may not know
+// that more memory is allocated than requested. But repeated calls for similar
+// sizes all will end-up returning the same block (since sizes are rounded up
+// to nearest page size).
 struct bufPoolChunk
 {
 protected:

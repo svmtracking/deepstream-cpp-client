@@ -63,8 +63,7 @@ SET(DSCPPClient_HEADERS
 	${SrcDir}/trie_array.h
 	${CMAKE_CURRENT_SOURCE_DIR}/include/dsclientbase.h)
 SET(DSCPPClient_SOURCES 
-	${SrcDir}/libuv-network.cpp
-	${SrcDir}/dsclientbase.cpp)
+	${SrcDir}/libuv-network.cpp)
 
 ADD_LIBRARY(dscppclient STATIC ${DSCPPClient_HEADERS} ${DSCPPClient_SOURCES})
 

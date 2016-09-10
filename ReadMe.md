@@ -1,6 +1,11 @@
 # deepstream-cpp-client
 C++ asynchronous client for [DeepStream.io](http://deepstream.io)
 
+## Features
+* Based on asynchronous cross-platform IOCP event loop of [LibUV](http://libuv.org/)
+* State-machine oriented functionality
+* Memory reuse for efficient I/O operations
+
 ## Status
 Coming soon: WIP
 

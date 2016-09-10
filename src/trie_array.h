@@ -1,3 +1,7 @@
+/*
+	Copyright (c) 2016 Cenacle Research India Private Limited
+*/
+
 #ifndef _TRIE_ARRAY_H__Guid__F3C84037_D677_4A13_8D9F_CBA6FE1F5944___
 #define _TRIE_ARRAY_H__Guid__F3C84037_D677_4A13_8D9F_CBA6FE1F5944___
 
@@ -90,7 +94,7 @@ public:
 	{
 		return getHash(szKey, std::strlen(szKey));
 	}
-	virtual inline HASH getHash(const char* sKey, size_t keyLen) const
+	inline HASH getHash(const char* sKey, size_t keyLen) const
 	{
 		return m_trie.exactMatchSearch<TRIE::result_type>(sKey, keyLen);
 	}
@@ -105,10 +109,73 @@ public:
 		for (int i = 0; i < arrayLen; ++i)
 			m_trie.update(keys[i], keylen[i]) = hash[i];
 	}
-	// clears all keys and values (without releasing the memory)
+	/// <summary>clears all keys and values (without releasing the memory)</summary>
 	inline void clear()
 	{
 		m_trie.reset();
+	}
+
+	/// <summary>iterator support for trie_hash</summary>
+	struct _iterator
+	{
+	protected:
+		cedar::npos_t	m_from;
+		size_t			m_len;
+		HASH			m_hash;
+		trie_hash*		m_pTrie;
+	public:
+		inline _iterator(trie_hash* _trie): m_from(0), m_len(0), m_hash(trie_hash::TRIE::CEDAR_NO_PATH), m_pTrie(_trie) { }
+		inline _iterator(cedar::npos_t _from, size_t _len, trie_hash* _trie): m_from(_from), m_len(_len), m_hash(trie_hash::TRIE::CEDAR_NO_PATH), m_pTrie(_trie)
+		{
+			m_hash = m_pTrie->m_trie.begin(m_from, m_len);
+		}
+		inline _iterator& operator++()
+		{
+			if(m_hash != trie_hash::TRIE::CEDAR_NO_PATH)
+				m_hash = m_pTrie->m_trie.next(m_from, m_len);
+			return *this;
+		}
+		inline _iterator& operator++(int) // post_increment
+		{
+			_iterator temp = *this;
+			++*this;
+			return temp;
+		}
+		inline bool operator==(const _iterator& other) const
+		{
+			return (m_pTrie == other.m_pTrie) && m_hash == other.m_hash;
+		}
+		inline bool operator!=(const _iterator& other) const
+		{
+			return !(*this == other);
+		}
+		inline const _iterator& operator*() const
+		{
+			return *this;
+		}
+		inline const _iterator* operator->() const
+		{
+			return this;
+		}
+		inline HASH hash() const { return m_hash;  }
+		inline size_t keylen() const { return m_len; }
+		inline const char* key(char* buf, size_t bufLen) const
+		{
+			assert(bufLen >= (keylen() + 1)); // buf should be preallocated by user to be large enough. 
+			assert('\0' == (buf[keylen()] = '\0')); // try to raise a memory corruption error for small buffers
+			if(m_hash != trie_hash::TRIE::CEDAR_NO_PATH) m_pTrie->m_trie.suffix(buf, m_len, m_from);
+			return buf;
+		}
+	};
+	typedef _iterator iterator;
+
+	inline iterator begin()
+	{
+		return _iterator(0, 0, this);
+	}
+	inline iterator end()
+	{
+		return _iterator(this);
 	}
 };
 
@@ -116,10 +183,6 @@ public:
 // on prefix. Two strings yield same hash if one is the prefix of other.
 struct trie_prefixed_hash: public  trie_hash
 {
-	inline HASH getHash(const char* sKey, size_t keyLen) const
-	{
-		return prefixMatch(sKey, keyLen);
-	}
 	// returns the HASH of the found match. -1 if none.
 	// Updates the keyLen to be the length of the match found. Zero if no match found.
 	inline HASH prefixMatch(const char* sKey, size_t& keyLen) const
@@ -128,6 +191,20 @@ struct trie_prefixed_hash: public  trie_hash
 		m_trie.commonPrefixSearch(sKey, &result, 1, keyLen);
 		keyLen = result.length;
 		return result.value;
+	}
+	inline TRIE::result_pair_type prefixMatch(const char* szKey, char sentinel = '\0') const
+	{
+		TRIE::result_pair_type result = { (HASH)-1, 0 };
+		m_trie.commonPrefixSearch(szKey, &result, 1, sentinel);
+		return result;
+	}
+	inline size_t prefixMatch(const char* szKey, size_t keyLen, TRIE::result_pair_type* resultArray, size_t resultArrayLen) const
+	{
+		return m_trie.commonPrefixSearch(szKey, resultArray, resultArrayLen, keyLen, 0);
+	}
+	inline size_t prefixMatch(const char* szKey, TRIE::result_pair_type* resultArray, size_t resultArrayLen, char sentinel = '\0') const
+	{
+		return m_trie.commonPrefixSearch(szKey, resultArray, resultArrayLen, sentinel);
 	}
 };
 
@@ -173,6 +250,10 @@ struct dyn_array
 	int m_nReserved = 0;	// allocated space for no. of objects (all need not be valid or initialized)
 	typedef typename std::conditional<std::is_scalar<Tobject>::value, const Tobject, const Tobject&>::type const_TobjRef;
 public:
+	inline int reserved() const
+	{
+		return m_nReserved;
+	}
 	inline bool ensureValid(int nIndex)
 	{
 		return reserve(nIndex + 1);
@@ -223,6 +304,39 @@ public:
 	}
 };
 
+template<typename Tobject, int TSize>
+struct static_array
+{
+	Tobject m_Base[TSize];	// the start of array
+	typedef typename std::conditional<std::is_scalar<Tobject>::value, const Tobject, const Tobject&>::type const_TobjRef;
+public:
+	inline int reserved() const
+	{
+		return TSize;
+	}
+	inline bool ensureValid(int nIndex) const
+	{
+		assert(nIndex >= 0 && nIndex < reserved());
+		return true;
+	}
+	inline const_TobjRef operator[](int nIndex) const
+	{
+		return m_Base[nIndex];
+	}
+	inline Tobject& operator[](int nIndex)
+	{
+		return m_Base[nIndex];
+	}
+	inline void setAllToZero()
+	{
+		memset(m_Base, 0, reserved()*sizeof(Tobject));
+	}
+	inline void setAllTo(const_TobjRef obj)
+	{
+		for (int i = 0; i < m_nReserved; ++i)
+			memcpy(m_Base + i, &obj, sizeof(Tobject));
+	}
+};
 
 struct instanced_triehash : protected trie_hash
 {
@@ -232,6 +346,7 @@ struct instanced_triehash : protected trie_hash
 struct shared_triehash
 {
 	typedef trie_hash::HASH HASH;
+	typedef trie_hash::_iterator iterator;
 protected:
 	static inline trie_hash& getInstance()
 	{
@@ -258,6 +373,14 @@ protected:
 	{
 		getInstance().setHash(keys, keylen, hash, arrayLen);
 	}
+	static inline iterator begin()
+	{
+		return getInstance().begin();
+	}
+	static inline iterator end()
+	{
+		return getInstance().end();
+	}
 private: 
 	// declared as private to avoid accidental clearing of shared keys by single instance
 	static inline void clear()
@@ -281,13 +404,13 @@ private:
 // change rapidly.
 // @param Tvalue the type of value to be held inside the array
 // @param empty the default empty value to be used when creating a new object in the array
-template<typename Tvalue = void*, typename Ttrie_hash_impl = instanced_triehash>
+template<typename Tvalue = void*, typename Ttrie_hash_impl = instanced_triehash, typename Tarray_impl = dyn_array<Tvalue>>
 struct trie_array : protected Ttrie_hash_impl
 {
 	typedef Ttrie_hash_impl Trie_Hash_Impl;
 	typedef typename Trie_Hash_Impl::HASH KEY;
 	
-	dyn_array<Tvalue> m_array;	// [key/hash/int]->value array
+	Tarray_impl m_array;	// [key/hash/int]->value array
 
 	typedef typename std::conditional<std::is_scalar<Tvalue>::value, const Tvalue, const Tvalue&>::type const_TValRef;
 public:
@@ -317,7 +440,7 @@ public:
 		// for shared-hash-impl there is a chance that the hash
 		// produces may not be within the range of the valid array extent.
 		KEY hash = Trie_Hash_Impl::getHash(sKey, keyLen);
-		if (hash < 0 || hash >= m_array.m_nReserved) return errVal;
+		if (hash < 0 || hash >= m_array.reserved()) return errVal;
 		return operator[](hash);
 	}
 	// Adds a new item to array at location indexed by 
@@ -379,7 +502,7 @@ public:
 	// The keys for these hashes should have been pre-loaded with loadKeys or insert() earlier.
 	inline void updateValues(KEY hashFirst, KEY hashLast, Tvalue values[])
 	{
-		assert(hashFirst < hashLast && hashFirst >= 0 && hashLast < m_array.m_nReserved);
+		assert(hashFirst < hashLast && hashFirst >= 0 && hashLast < m_array.reserved());
 		memcpy(m_array.m_pBase + hashFirst, values, sizeof(Tvalue)*(hashLast - hashFirst));
 	}
 	// pre-loads the keys, so that values can be supplied later (with updateValuex()).
@@ -429,6 +552,47 @@ public:
 	{
 		Trie_Hash_Impl::clear();
 		clearValues(empty);
+	}
+
+	struct _iterator : public Trie_Hash_Impl::iterator
+	{
+		typedef typename Trie_Hash_Impl::iterator baseIterator;
+		inline const_TValRef value() const { return (*(trie_array*)(this->m_pTrie))[m_hash]; }
+		_iterator(const baseIterator& other): baseIterator(other) {}
+	};
+	typedef _iterator iterator;
+
+	inline iterator begin()
+	{
+		return iterator(Trie_Hash_Impl::begin());
+	}
+	inline iterator end()
+	{
+		return iterator(Trie_Hash_Impl::end());
+	}
+};
+
+template<typename Tvalue = void*, typename Tarray_impl = dyn_array<Tvalue>>
+struct trie_prefixed_array : public trie_array <Tvalue, trie_prefixed_hash, Tarray_impl>
+{
+	typedef trie_prefixed_hash::TRIE TRIE;
+	// Returns the value for the given key. If the key does not
+	// exist already, the supplied error value will be returned.
+	// Key/value will *not* be added to the array. The returned
+	// match need not be the longest match
+	inline const_TValRef prefixMatch(const char* sKey, size_t keyLen, const_TValRef errVal) const
+	{
+		// for shared-hash-impl there is a chance that the hash
+		// produced may not be within the range of the valid array extent.
+		KEY hash = Trie_Hash_Impl::prefixMatch(sKey, keyLen);
+		if (hash < 0 || hash >= m_array.reserved()) return errVal;
+		return operator[](hash);
+	}
+	inline const_TValRef prefixMatch(const char* szKey, size_t keyLen, TRIE::result_pair_type* resultArray, size_t resultArrayLen, const_TValRef errVal) const
+	{
+		size_t nResults = Trie_Hash_Impl::prefixMatch(szKey, keyLen, resultArray, resultArrayLen);
+		if (nResults <= 0) return errVal;
+		return operator[](resultArray[nResults - 1].value);
 	}
 };
 

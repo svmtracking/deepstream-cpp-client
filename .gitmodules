@@ -10,3 +10,6 @@
 [submodule "src/3rdparty/cpp.react"]
 	path = src/3rdparty/cpp.react
 	url = https://github.com/schlangster/cpp.react.git
+[submodule "test/3rdparty/catch"]
+	path = test/3rdparty/catch
+	url = https://github.com/philsquared/Catch.git
