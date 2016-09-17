@@ -73,6 +73,12 @@ public:
 		inuseQ.erase(foundIter);
 #endif
 	}
+#if BUFPOOL_TRACK_MEMORY
+	inline bool isInUse(const T* pBuf) const
+	{
+		return pBuf!=nullptr && inuseQ.cend() != std::find(inuseQ.cbegin(), inuseQ.cend(), pBuf);
+	}
+#endif
 protected:
 	std::deque<T*> freeQ;
 #if BUFPOOL_TRACK_MEMORY
@@ -165,13 +171,25 @@ public:
 		void* pChunk = ((char*)pBuf - sizeof(int));
 		return *((int*)pChunk);
 	}
+#if BUFPOOL_TRACK_MEMORY
+	inline bool isInUse(const void* pBuf) const
+	{
+		if (pBuf == nullptr) return false;
+		void* pChunk = ((char*)pBuf - sizeof(int));
+		int size = *((int*)pChunk);
+		auto inUserIter = inuseQ.find(size);
+		if (inUserIter == inuseQ.cend()) return false;
+		const TQueue& inuseQueue = inUserIter->second;
+		return inuseQueue.cend() != std::find(inuseQueue.cbegin(), inuseQueue.cend(), pChunk);
+	}
+#endif
 protected:
 	typedef std::deque<void*> TQueue;
 	std::map<size_t, TQueue> freeQ;
 #if BUFPOOL_TRACK_MEMORY
 	std::map<size_t, TQueue> inuseQ;
 #endif
-};
+}; //TODO: std::dequeue may not be thread-safe. Checkout any high-performance fast-inert/remove containers that are thread-safe.
 
 struct bufPool
 {
@@ -187,15 +205,77 @@ struct bufPool
 	}
 };
 
-#define _NEW(type)					bufPoolT<type>::getObject().acquire()
-#define _DELETE(ptr)				bufPool::release(ptr)
-#define _NEW1(type, arg1)			bufPoolT<type>::getObject().acquire(arg1)
-#define _NEW2(type, arg1, arg2)		bufPoolT<type>::getObject().acquire(arg1, arg2)
+#define _NEW(type)								bufPoolT<type>::getObject().acquire()
+#define _DELETE(ptr)							bufPool::release(ptr)
+#define _NEW1(type, arg1)						bufPoolT<type>::getObject().acquire(arg1)
+#define _NEW2(type, arg1, arg2)					bufPoolT<type>::getObject().acquire(arg1, arg2)
+#define _NEW3(type, arg1, arg2, arg3)			bufPoolT<type>::getObject().acquire(arg1, arg2, arg3)
+#define _NEW4(type, arg1, arg2, arg3, arg4)		bufPoolT<type>::getObject().acquire(arg1, arg2, arg3, arg4)
 
 #define POOLED_ALLOC(size)			bufPoolChunk::getObject().acquire(size)
-#define POOLED_FREE(ptr)			bufPoolChunk::getObject().release((void*)ptr)
-#define POOLED_ALLOCATED_SIZE(ptr)	bufPoolChunk::getObject().allocatedSize((void*)ptr)
+#define POOLED_FREE(ptr)			bufPoolChunk::getObject().release(ptr)
+#define POOLED_ALLOCATED_SIZE(ptr)	bufPoolChunk::getObject().allocatedSize(ptr)
 
-//TODO: std::dequeue may not be thread-safe. Checkout any high-performance fast-inert/remove containers that are thread-safe.
+
+// unique_bufptr is useful for transferring ownership. Use it as function parameter (by value).
+// std::unique_ptr (at least on MSVC) takes additional memory to hold the deleter object, which is not required
+template<typename T = void, typename TGetType = char>
+struct unique_bufptr
+{
+	typedef unique_bufptr _Myt;
+	typedef T* pointer;
+
+	template<typename objType>
+	struct deleter
+	{
+		inline static void _free(objType* ptr) { _DELETE(ptr); }
+	};
+	template<>
+	struct deleter<void>
+	{
+		inline static void _free(void* ptr) { POOLED_FREE(ptr); }
+	};
+
+	inline explicit operator bool() const 	{	return pChunk != nullptr;	}
+	inline TGetType* get() const { return (TGetType*) pChunk; }
+	inline pointer release() { pointer temp = pChunk; pChunk = nullptr; return temp; } // yield ownership of pointer
+	inline void reset(pointer ptr = nullptr) { deleter<T>::_free(pChunk);  pChunk = ptr; } // release the pointer (and hold some other pointer)
+
+	inline bool operator!=(nullptr_t ptr) const { return pChunk != ptr; }
+
+	inline ~unique_bufptr() { reset(nullptr); }
+	inline unique_bufptr(_Myt&& other) : pChunk(other.pChunk) { other.pChunk = nullptr; }
+	inline _Myt& operator=(_Myt&& other) { assert(this != &other); reset(other.release()); return *this; }
+
+	//template<typename T1, typename TG1=T1>
+	//inline unique_bufptr(unique_bufptr<T1, TG1>&& other) : pChunk((T*)other.pChunk) { other.pChunk = nullptr; }
+
+	unique_bufptr(const _Myt&) = delete;
+	_Myt& operator=(const _Myt&) = delete;
+
+protected:
+	T* pChunk = nullptr;
+
+public:
+#if BUFPOOL_TRACK_MEMORY
+	template<typename objType>
+	struct validator
+	{
+		inline static bool isInUse(objType* ptr) { return bufPoolT<objType>::getObject().isInUse(ptr); }
+	};
+	template<>
+	struct validator<void>
+	{
+		inline static bool isInUse(void* ptr) { return bufPoolChunk::getObject().isInUse(ptr); }
+	};
+#endif
+	inline explicit unique_bufptr(pointer ptr) : pChunk(ptr)
+	{
+#if BUFPOOL_TRACK_MEMORY 
+		// unique_bufptr can only deal with buffers that are allocated through one of bufPoolChunk or bufPoolT acquire() methods
+		assert(validator<T>::isInUse(ptr)); //  Failure here means ptr is some externally allocated buffer that we do not know how to deal with
+#endif
+	}
+};
 
 #endif // !_BUFPOOL_H__CBA8E586_437B_491E_B3BC_2C039526D9FD__

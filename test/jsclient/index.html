@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://cdn.rawgit.com/deepstreamIO/deepstream.io-client-js/master/dist/deepstream.min.js"></script>
+  </head>
+  <body>
+    <input type="text" />
+    <script type="text/javascript">
+      var client = deepstream('localhost:6020');
+      client.on('error', function (error, event, topic) {
+        console.log(error, event, topic);
+      });
+      client.on('connectionStateChanged', connectionState => {
+      	console.log("connection state: " + connectionState);
+      })
+      client.login({ username: 'userA', password: 'password' }, function (success, data) {
+      	if(success)
+      	{
+      		console.log("login successful", data);
+      		client.rpc.make('echo', { param: "hello world" }, (err, result) => {
+      			console.log("result: ", err, result);
+      		});
+      	}
+      	else
+      	{
+
+      	}
+      });
+    </script>
+  </body>
+</html>

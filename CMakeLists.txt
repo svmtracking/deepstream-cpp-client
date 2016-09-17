@@ -61,7 +61,8 @@ SET(DSCPPClient_HEADERS
 	${CedarDir}/cedarpp.h
 	${SrcDir}/bufPool.h
 	${SrcDir}/trie_array.h
-	${CMAKE_CURRENT_SOURCE_DIR}/include/dsclientbase.h)
+	${CMAKE_CURRENT_SOURCE_DIR}/include/dsclientbase.h
+	${CMAKE_CURRENT_SOURCE_DIR}/include/rpc.h	)
 SET(DSCPPClient_SOURCES 
 	${SrcDir}/libuv-network.cpp)
 

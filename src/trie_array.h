@@ -414,6 +414,11 @@ struct trie_array : protected Ttrie_hash_impl
 
 	typedef typename std::conditional<std::is_scalar<Tvalue>::value, const Tvalue, const Tvalue&>::type const_TValRef;
 public:
+	// Returns the KEY index if exists. Else returns -1
+	inline KEY findKey(const char* szKey, size_t keyLen) const
+	{
+		return Trie_Hash_Impl::getHash(sKey, keyLen);
+	}
 	// Returns the value for the given key. The key *should* pre-exist
 	inline const_TValRef operator[](const char* szKey) const
 	{
@@ -438,7 +443,7 @@ public:
 	inline const_TValRef at(const char* sKey, size_t keyLen, const_TValRef errVal) const
 	{
 		// for shared-hash-impl there is a chance that the hash
-		// produces may not be within the range of the valid array extent.
+		// produced may not be within the range of the valid array extent.
 		KEY hash = Trie_Hash_Impl::getHash(sKey, keyLen);
 		if (hash < 0 || hash >= m_array.reserved()) return errVal;
 		return operator[](hash);
@@ -564,11 +569,11 @@ public:
 
 	inline iterator begin()
 	{
-		return iterator(Trie_Hash_Impl::begin());
+		return Trie_Hash_Impl::begin();
 	}
 	inline iterator end()
 	{
-		return iterator(Trie_Hash_Impl::end());
+		return Trie_Hash_Impl::end();
 	}
 };
 

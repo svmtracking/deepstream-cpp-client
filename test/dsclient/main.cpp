@@ -12,29 +12,52 @@ void on_connect(uv_connect_t* connection, int status);
 void on_stream_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf);
 void on_stream_close(uv_handle_t* handle);
 
+
 struct uvIOHandler
 {
 	uv_connect_t	m_connection;
 	uv_tcp_t		m_socket;
 
-	int send(const char* buf, size_t len)
+	struct _Writer
 	{
-		uv_stream_t* stream = m_connection.handle; // same as m_socket
-		uv_write_t* write_req = _NEW(uv_write_t);
-		write_req->data = (void*)buf;
+		void*	buf;
+		size_t	len;
+		DSCPP::LPFN_SEND_COMPLETE cb;
+		inline _Writer(void* argbuf, size_t arglen, DSCPP::LPFN_SEND_COMPLETE argcb): cb(argcb), buf(argbuf), len(arglen)
+		{ 
+			this->write_req.data = this;
+		}
+		uv_write_t write_req;
+	};
+
+	///@param buf the data that need to be sent. memory is owned and managed by caller
+	///@param len the size of buf to be sent
+	///@param cb the callback on completion. Called with buf and len as parameters
+	int send(void* buf, size_t len, DSCPP::LPFN_SEND_COMPLETE cb = release_send_buffer)
+	{
+		uv_stream_t* stream = m_connection.handle;		// same as m_socket
+		_Writer* writer = _NEW3(_Writer, buf, len, cb);	// gets deleted in on_send_done()
 		uv_buf_t bufs[] = { uv_buf_init((char*)buf, len) };
-		return uv_write(write_req, stream, bufs, 1, on_send_done);
+		return uv_write(&writer->write_req, stream, bufs, 1, on_send_done);
 	}
 	static void on_send_done(uv_write_t* write_req, int status)
 	{
-		_DELETE(write_req);
-		POOLED_FREE(write_req->data);	// this was allocated inside alloc_send_buffer() by _dsclientBase
-		// write_req->handle == m_socket / stream. 
-		// close it with uv_close(write_req->handle,[](){}) to close the socket and end the uv_run().
+		_Writer* writer = (_Writer*)write_req->data;
+		// call the completion callback
+		(*writer->cb)(writer->buf, writer->len);
+		// free the memory allocated in the send()
+		_DELETE(writer);
+		// Notes: write_req->handle == m_socket / stream. 
+		// You can use uv_close(write_req->handle,[](){}) here to close the socket and end the uv_run() loop.
 	}
-	void* alloc_send_buffer(size_t size)
+	// allocates a buffer that has to be owned and managed by the caller
+	static inline void* alloc_send_buffer(size_t size)
 	{
 		return POOLED_ALLOC(size);
+	}
+	static inline void release_send_buffer(void* buf, size_t s = 0)
+	{
+		POOLED_FREE(buf);	// buf should have been allocated with alloc_send_buffer()
 	}
 	int recv(char* buf, size_t buflen)
 	{
@@ -116,14 +139,15 @@ void on_stream_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 	{
 		std::cout << "\nread done: " << buf->base;
 		_dsclientUVDriver* pdscUV = (_dsclientUVDriver*) stream->data;
-		pdscUV->handle_server_directive(buf->base, nread);
+		pdscUV->handle_server_directive(_dsclientUVDriver::unique_bufptr(buf->base), nread); // buf->base is allocated through alloc_cb(), will be owned by handle_server_directive()
 	}
 	else
 	{
 		std::cout << "\nSocket Read Failure: connection lost with server";
 		uv_close((uv_handle_t*)stream, on_stream_close); // closes the stream and stops the uv_run (endgame !!); this stream == _dsclientUVDriver::m_socket;
+		if (buf->base != nullptr && buf->len > 0) 
+			POOLED_FREE(buf->base); // this was allocated through alloc_cb() by libuv from uv_read_start()
 	}
-	if (buf->base != nullptr && buf->len > 0) POOLED_FREE(buf->base); // this was allocated through alloc_cb() by libuv from uv_read_start()
 }
 
 void on_stream_close(uv_handle_t* handle)
