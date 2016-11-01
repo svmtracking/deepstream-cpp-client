@@ -41,7 +41,7 @@ find_path(LIBUV_INCLUDE_DIR uv.h)
 find_library(LIBUV_LIBRARY NAMES uv uv1)
 
 # ADD_SUBDIRECTORY(src/3rdparty/cpp.react)
-ADD_SUBDIRECTORY(src/3rdparty/g3log)
+# ADD_SUBDIRECTORY(src/3rdparty/g3log)
 
 #################################
 #### Target: dscppclient  ####

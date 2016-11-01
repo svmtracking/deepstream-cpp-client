@@ -65,14 +65,14 @@ struct uvIOHandler
 	}
 	int disconnect()
 	{
-		uv_read_stop(m_connection.handle);
+		uv_read_stop(m_connection.handle); // m_connection.handle is same as m_socket
 		if (!uv_is_closing((uv_handle_t*)m_connection.handle))
 			uv_close((uv_handle_t*)m_connection.handle, on_stream_close);
 		return 0;
 	}
 };
 
-class _dsclientUVDriver : public DSCPP::_dsclientBase<DSCPP::HandlerJunction<uvIOHandler, DSCPP::simpleCredentialsSupplier>>
+class _dsclientUVDriver : public DSCPP::_dsclientBase<uvIOHandler, DSCPP::simpleCredentialsSupplier>
 {
 protected:
 	uv_loop_t*		m_uvLoop = nullptr;
@@ -80,12 +80,7 @@ protected:
 public:
 	~_dsclientUVDriver()
 	{
-		disconnect();
-		if (m_uvLoop != nullptr)
-		{
-			uv_loop_close(m_uvLoop);
-			m_uvLoop = nullptr;
-		}
+		stop();
 	}
 	int connect(const char* szServer = "127.0.0.1", int nPort = 6021, const char* szUsername = "userA", const char* szPassword = "password", int nTimeoutDelay = 60)
 	{
@@ -110,7 +105,15 @@ public:
 	{
 		return uv_run(m_uvLoop, UV_RUN_DEFAULT);
 	}
-
+	void stop()
+	{
+		disconnect();
+		if (m_uvLoop != nullptr)
+		{
+			uv_loop_close(m_uvLoop);
+			m_uvLoop = nullptr;
+		}
+	}
 };
 
 void on_connect(uv_connect_t* connection, int status)
@@ -124,7 +127,7 @@ void on_connect(uv_connect_t* connection, int status)
 	uv_stream_set_blocking(stream, false);
 	stream->data = pdscUV;
 
-	pdscUV->register_rpc_provider("echo", [](const char* sz) {
+	pdscUV->register_rpc_provider("echo", [](DSCPP::_rpcCall& sz) {
 		std::cerr << "echo called";
 		return 0;
 	});
@@ -152,14 +155,33 @@ void on_stream_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 
 void on_stream_close(uv_handle_t* handle)
 {
+	// nothing to delete here because the socket (==handle) is stack allocated (m_socket)
+}
+
+_dsclientUVDriver gClientDriver;
+
+void interrupt_handler(int sig)
+{
+	std::cerr << "\n Received Interrupt. Stopping the server loop";
+	gClientDriver.stop();
+}
+void setup_signal_handlers(void)
+{
+	signal(SIGINT, &interrupt_handler);
+	signal(SIGTERM, &interrupt_handler);
+#if defined(WIN32) || defined(_WIN32)
+#else
+	/* Stops the SIGPIPE signal being raised when writing to a closed socket */
+	signal(SIGPIPE, SIG_IGN);
+#endif
 }
 
 int main()
 {
-	_dsclientUVDriver clientDriver;
-	if (clientDriver.connect() >= 0)
+	if (gClientDriver.connect() >= 0)
 	{
-		clientDriver.run();
+		setup_signal_handlers();
+		gClientDriver.run();
 		std::cerr << "\nClient loop stopped";
 	}
 	else

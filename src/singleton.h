@@ -8,10 +8,9 @@
 template<typename T>
 struct _singleton
 {
-	T value;
-	static _singleton & getObject()
+	static T& getObject()
 	{
-		static _singleton obj;	// Thread-safe since C++11
+		static T obj;	// Thread-safe since C++11
 		return obj;
 	}
 	// delete the copy, move constructors and assign operators

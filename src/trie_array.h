@@ -69,13 +69,13 @@ public:
 	///	 calculated once or specified manually earlier, the old values will be returned and
 	///  the defaultHash value will be ignored.
 	/// </summary>
-	inline HASH hash(const char* sKey, size_t keyLen, HASH defaultHash=-1)
+	inline HASH hash(const char* szKey, size_t keyLen, HASH defaultHash=-1)
 	{
-		HASH result = getHash(sKey, keyLen);
+		HASH result = getHash(szKey, keyLen);
 		if (result < 0)
 		{
 			result = (defaultHash == -1 ? (m_trie.num_keys()) : defaultHash);
-			m_trie.update(sKey, keyLen) = result;
+			m_trie.update(szKey, keyLen) = result;
 		}
 		return result;
 	}
@@ -94,9 +94,9 @@ public:
 	{
 		return getHash(szKey, std::strlen(szKey));
 	}
-	inline HASH getHash(const char* sKey, size_t keyLen) const
+	inline HASH getHash(const char* szKey, size_t keyLen) const
 	{
-		return m_trie.exactMatchSearch<TRIE::result_type>(sKey, keyLen);
+		return m_trie.exactMatchSearch<TRIE::result_type>(szKey, keyLen);
 	}
 	/// <summary>Sets the hash for a string to the given value. Overwrites the old hash value if exists.</summary>
 	inline void setHash(const char* keys[], const HASH hash[], int arrayLen)
@@ -116,7 +116,7 @@ public:
 	}
 
 	/// <summary>iterator support for trie_hash</summary>
-	struct _iterator
+	struct iterator
 	{
 	protected:
 		cedar::npos_t	m_from;
@@ -124,36 +124,36 @@ public:
 		HASH			m_hash;
 		trie_hash*		m_pTrie;
 	public:
-		inline _iterator(trie_hash* _trie): m_from(0), m_len(0), m_hash(trie_hash::TRIE::CEDAR_NO_PATH), m_pTrie(_trie) { }
-		inline _iterator(cedar::npos_t _from, size_t _len, trie_hash* _trie): m_from(_from), m_len(_len), m_hash(trie_hash::TRIE::CEDAR_NO_PATH), m_pTrie(_trie)
+		inline iterator(trie_hash* _trie): m_from(0), m_len(0), m_hash(trie_hash::TRIE::CEDAR_NO_PATH), m_pTrie(_trie) { }
+		inline iterator(cedar::npos_t _from, size_t _len, trie_hash* _trie): m_from(_from), m_len(_len), m_hash(trie_hash::TRIE::CEDAR_NO_PATH), m_pTrie(_trie)
 		{
 			m_hash = m_pTrie->m_trie.begin(m_from, m_len);
 		}
-		inline _iterator& operator++()
+		inline iterator& operator++()
 		{
 			if(m_hash != trie_hash::TRIE::CEDAR_NO_PATH)
 				m_hash = m_pTrie->m_trie.next(m_from, m_len);
 			return *this;
 		}
-		inline _iterator& operator++(int) // post_increment
+		inline iterator& operator++(int) // post_increment
 		{
-			_iterator temp = *this;
+			iterator temp = *this;
 			++*this;
 			return temp;
 		}
-		inline bool operator==(const _iterator& other) const
+		inline bool operator==(const iterator& other) const
 		{
 			return (m_pTrie == other.m_pTrie) && m_hash == other.m_hash;
 		}
-		inline bool operator!=(const _iterator& other) const
+		inline bool operator!=(const iterator& other) const
 		{
 			return !(*this == other);
 		}
-		inline const _iterator& operator*() const
+		inline const iterator& operator*() const
 		{
 			return *this;
 		}
-		inline const _iterator* operator->() const
+		inline const iterator* operator->() const
 		{
 			return this;
 		}
@@ -167,15 +167,14 @@ public:
 			return buf;
 		}
 	};
-	typedef _iterator iterator;
 
 	inline iterator begin()
 	{
-		return _iterator(0, 0, this);
+		return iterator(0, 0, this);
 	}
 	inline iterator end()
 	{
-		return _iterator(this);
+		return iterator(this);
 	}
 };
 
@@ -185,10 +184,10 @@ struct trie_prefixed_hash: public  trie_hash
 {
 	// returns the HASH of the found match. -1 if none.
 	// Updates the keyLen to be the length of the match found. Zero if no match found.
-	inline HASH prefixMatch(const char* sKey, size_t& keyLen) const
+	inline HASH prefixMatch(const char* szKey, size_t& keyLen) const
 	{
 		TRIE::result_pair_type result = { (HASH)-1, 0 };
-		m_trie.commonPrefixSearch(sKey, &result, 1, keyLen);
+		m_trie.commonPrefixSearch(szKey, &result, 1, keyLen);
 		keyLen = result.length;
 		return result.value;
 	}
@@ -214,13 +213,13 @@ struct map_hash
 	typedef std::map<std::string, HASH> TRIE;
 	TRIE m_trie;
 public:
-	inline HASH hash(const char* sKey, HASH defaultHash = -1)
+	inline HASH hash(const char* szKey, HASH defaultHash = -1)
 	{
-		HASH result = getHash(sKey);
+		HASH result = getHash(szKey);
 		if (result < 0)
 		{
 			result = (defaultHash == -1 ? (HASH)m_trie.size() : defaultHash);
-			m_trie[sKey] = result;
+			m_trie[szKey] = result;
 		}
 		return result;
 	}
@@ -346,24 +345,24 @@ struct instanced_triehash : protected trie_hash
 struct shared_triehash
 {
 	typedef trie_hash::HASH HASH;
-	typedef trie_hash::_iterator iterator;
+	typedef trie_hash::iterator iterator;
 protected:
 	static inline trie_hash& getInstance()
 	{
 		static trie_hash obj;
 		return obj;
 	}
-	static inline HASH hash(const char* sKey, size_t keyLen, HASH defaultHash = -1)
+	static inline HASH hash(const char* szKey, size_t keyLen, HASH defaultHash = -1)
 	{
-		return getInstance().hash(sKey, keyLen, defaultHash);
+		return getInstance().hash(szKey, keyLen, defaultHash);
 	}
 	static inline HASH getHash(const char* szKey)
 	{
 		return getHash(szKey, std::strlen(szKey));
 	}
-	static inline HASH getHash(const char* sKey, size_t keyLen)
+	static inline HASH getHash(const char* szKey, size_t keyLen)
 	{
-		return getInstance().getHash(sKey, keyLen);
+		return getInstance().getHash(szKey, keyLen);
 	}
 	static inline void setHash(const char* keys[], const HASH hash[], int arrayLen)
 	{
@@ -407,6 +406,7 @@ private:
 template<typename Tvalue = void*, typename Ttrie_hash_impl = instanced_triehash, typename Tarray_impl = dyn_array<Tvalue>>
 struct trie_array : protected Ttrie_hash_impl
 {
+	typedef trie_array _Myt;
 	typedef Ttrie_hash_impl Trie_Hash_Impl;
 	typedef typename Trie_Hash_Impl::HASH KEY;
 	
@@ -417,7 +417,7 @@ public:
 	// Returns the KEY index if exists. Else returns -1
 	inline KEY findKey(const char* szKey, size_t keyLen) const
 	{
-		return Trie_Hash_Impl::getHash(sKey, keyLen);
+		return Trie_Hash_Impl::getHash(szKey, keyLen);
 	}
 	// Returns the value for the given key. The key *should* pre-exist
 	inline const_TValRef operator[](const char* szKey) const
@@ -433,18 +433,18 @@ public:
 		return m_array[keyHash];
 	}
 	// Returns the value for the given key. The key *should* pre-exist
-	inline const_TValRef at(const char* sKey, size_t keyLen) const
+	inline const_TValRef at(const char* szKey, size_t keyLen) const
 	{
-		return operator[](Trie_Hash_Impl::getHash(sKey, keyLen));
+		return operator[](Trie_Hash_Impl::getHash(szKey, keyLen));
 	}
 	// Returns the value for the given key. If the key does not
 	// exist already, the supplied error value will be returned.
 	// Key/value will *not* be added to the array.
-	inline const_TValRef at(const char* sKey, size_t keyLen, const_TValRef errVal) const
+	inline const_TValRef at(const char* szKey, size_t keyLen, const_TValRef errVal) const
 	{
 		// for shared-hash-impl there is a chance that the hash
 		// produced may not be within the range of the valid array extent.
-		KEY hash = Trie_Hash_Impl::getHash(sKey, keyLen);
+		KEY hash = Trie_Hash_Impl::getHash(szKey, keyLen);
 		if (hash < 0 || hash >= m_array.reserved()) return errVal;
 		return operator[](hash);
 	}
@@ -456,9 +456,9 @@ public:
 	{
 		return insertkv(szKey, strlen(szKey), value);
 	}
-	inline KEY insertkv(const char* sKey, size_t keyLen, const_TValRef value)
+	inline KEY insertkv(const char* szKey, size_t keyLen, const_TValRef value)
 	{
-		KEY index = Trie_Hash_Impl::hash(sKey, keyLen);
+		KEY index = Trie_Hash_Impl::hash(szKey, keyLen);
 		m_array.ensureValid(index);	// grow the array if needed
 		updateValue(index, value);
 		return index;
@@ -559,13 +559,20 @@ public:
 		clearValues(empty);
 	}
 
-	struct _iterator : public Trie_Hash_Impl::iterator
+	struct iterator : public Trie_Hash_Impl::iterator
 	{
 		typedef typename Trie_Hash_Impl::iterator baseIterator;
 		inline const_TValRef value() const { return (*(trie_array*)(this->m_pTrie))[m_hash]; }
-		_iterator(const baseIterator& other): baseIterator(other) {}
+		inline iterator(const baseIterator& other): baseIterator(other) {}
+		inline const iterator& operator*() const
+		{
+			return *this;
+		}
+		inline const iterator* operator->() const
+		{
+			return this;
+		}
 	};
-	typedef _iterator iterator;
 
 	inline iterator begin()
 	{
@@ -585,11 +592,11 @@ struct trie_prefixed_array : public trie_array <Tvalue, trie_prefixed_hash, Tarr
 	// exist already, the supplied error value will be returned.
 	// Key/value will *not* be added to the array. The returned
 	// match need not be the longest match
-	inline const_TValRef prefixMatch(const char* sKey, size_t keyLen, const_TValRef errVal) const
+	inline const_TValRef prefixMatch(const char* szKey, size_t keyLen, const_TValRef errVal) const
 	{
 		// for shared-hash-impl there is a chance that the hash
 		// produced may not be within the range of the valid array extent.
-		KEY hash = Trie_Hash_Impl::prefixMatch(sKey, keyLen);
+		KEY hash = Trie_Hash_Impl::prefixMatch(szKey, keyLen);
 		if (hash < 0 || hash >= m_array.reserved()) return errVal;
 		return operator[](hash);
 	}

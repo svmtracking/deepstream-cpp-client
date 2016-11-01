@@ -86,8 +86,8 @@ protected:
 #endif
 };
 
-#define PAGE_ROUND_DOWN(x, PAGE_SIZE)	(((ULONG_PTR)(x)) & (~(PAGE_SIZE-1)))
-#define PAGE_ROUND_UP(x, PAGE_SIZE)		( (((ULONG_PTR)(x)) + PAGE_SIZE-1)  & (~(PAGE_SIZE-1)) )
+#define PAGE_ROUND_DOWN(x, PAGE_SIZE)	((x) & (~(PAGE_SIZE-1)))
+#define PAGE_ROUND_UP(x, PAGE_SIZE)		( ((x) + PAGE_SIZE-1)  & (~(PAGE_SIZE-1)) )
 
 #define PAGE_SIZE_1K 0x0400
 #define PAGE_SIZE_2K 0x0800
@@ -236,19 +236,18 @@ struct unique_bufptr
 		inline static void _free(void* ptr) { POOLED_FREE(ptr); }
 	};
 
+	inline unique_bufptr(): pChunk(nullptr) { }
+	inline unique_bufptr(_Myt&& other) : pChunk(other.pChunk) { other.pChunk = nullptr; }
+	inline ~unique_bufptr() { reset(nullptr); }
+
 	inline explicit operator bool() const 	{	return pChunk != nullptr;	}
 	inline TGetType* get() const { return (TGetType*) pChunk; }
 	inline pointer release() { pointer temp = pChunk; pChunk = nullptr; return temp; } // yield ownership of pointer
-	inline void reset(pointer ptr = nullptr) { deleter<T>::_free(pChunk);  pChunk = ptr; } // release the pointer (and hold some other pointer)
+	inline void reset(pointer ptr = nullptr) { if (pChunk != ptr) { deleter<T>::_free(pChunk);  pChunk = ptr; } } // release the pointer (and hold some other pointer)
 
-	inline bool operator!=(nullptr_t ptr) const { return pChunk != ptr; }
-
-	inline ~unique_bufptr() { reset(nullptr); }
-	inline unique_bufptr(_Myt&& other) : pChunk(other.pChunk) { other.pChunk = nullptr; }
 	inline _Myt& operator=(_Myt&& other) { assert(this != &other); reset(other.release()); return *this; }
-
-	//template<typename T1, typename TG1=T1>
-	//inline unique_bufptr(unique_bufptr<T1, TG1>&& other) : pChunk((T*)other.pChunk) { other.pChunk = nullptr; }
+	inline _Myt& operator=(pointer ptr) { reset(ptr); return *this; }
+	inline bool operator!=(nullptr_t ptr) const { return pChunk != ptr; }
 
 	unique_bufptr(const _Myt&) = delete;
 	_Myt& operator=(const _Myt&) = delete;

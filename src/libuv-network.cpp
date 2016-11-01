@@ -3,7 +3,6 @@
 */
 
 #include "dsclientbase.h"
-#include "bufPool.h"
 #include "trie_array.h"
 #include "g2log-timer.h"
 

@@ -12,17 +12,18 @@ namespace DSCPP
 {
 	struct _rpcCall
 	{
-		const char* methodName;	// points to the start of method name in the buf
-		int			nameLen;
-		const char* uid;		// points to the start of uid in the buf
-		int			uidLen;
-		const char* params;		// points to the start of parameters in the buf
-		int			paramsLen;
-		const void* buf;		// the buffer received from server read (should not be modified in the RPC method)
-		size_t		bufLen;
+		typedef unique_bufptr<void, char> unique_bufptr;
+		const char*		methodName;	// points to the start of method name in the buf
+		int				nameLen;
+		const char*		uid;		// points to the start of uid in the buf
+		int				uidLen;
+		const char*		params;		// points to the start of parameters in the buf
+		int				paramsLen;
+		unique_bufptr	spbuf;		// the buffer received from server read (should not be modified in the RPC method)
+		size_t			bufLen;
 	};
 
-	typedef int(*LPFNRPCMethod)(_rpcCall);
+	typedef int(*LPFNRPCMethod)(_rpcCall&);
 
 	enum RPC_RESULT_TYPE : short { RPC_SINGLE_RESULT = 0, RPC_PROGRESSIVE_RESULT, RPC_STREAMED_RESULT };
 

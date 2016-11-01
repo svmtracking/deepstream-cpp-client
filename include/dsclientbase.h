@@ -12,12 +12,10 @@
 #include <future>
 #include <memory>
 #include <type_traits>
-#include <future>
 
-#include "uv.h"
-#include "bufPool.h"
 #include "singleton.h"
 #include "rpc.h"
+#include "uv.h"
 
 namespace DSCPP
 {
@@ -83,18 +81,12 @@ namespace DSCPP
 
 	// Provides base functionality with extensible IO and Credential handlers.
 	// You would need a driver (or loop) to use this correctly.
-	template
-	<
-		typename TIOHandler = simpleIOHandler,
-		typename TCredentialsSupplier = simpleCredentialsSupplier,
-		typename TRPCCache = simpleRPCCache
-	>
-	class _dsclientBase : public TIOHandler, public TCredentialsSupplier, public TRPCCache
+	template<typename TIOHandler = simpleIOHandler,	typename TCredentialsSupplier = simpleCredentialsSupplier>
+	class _dsclientBase : public TIOHandler, public TCredentialsSupplier
 	{
 	public:
 		typedef typename TIOHandler IO;
 		typedef typename TCredentialsSupplier CS;
-		typedef typename TRPCCache	RPCCache;
 
 		typedef unique_bufptr<void, char> unique_bufptr;
 		typedef _dsclientBase _MyType;
@@ -161,8 +153,8 @@ namespace DSCPP
 		bool					m_bReadyForTransfer;	// indicates connected & successful auth state
 	public:
 		inline _dsclientBase() :
-			m_stateHandlers(_singleton<_statehandlers>::getObject().value),
-			m_Router(_singleton<TRPCTrieArray>::getObject().value),
+			m_stateHandlers(_singleton<_statehandlers>::getObject()),
+			m_Router(_singleton<TRPCTrieArray>::getObject()),
 			m_nLoginRetryCount(0),
 			m_bReadyForTransfer(false)
 		{
@@ -264,19 +256,15 @@ namespace DSCPP
 			if (uidLen >= MAX_UID_LEN || *pBuf == '\0')
 				return on_unknown(std::forward<unique_bufptr>(spbuf), bufsize);	// malformed RPC call, we do not respond
 
+			// reject if provider does not exist
+			_rpcProvider* provider = m_Router.at(methodName, nameLen, nullptr);
+			 if (provider == nullptr) 
+				 return send_rpc_unsupported(std::forward<unique_bufptr>(spbuf), (pBuf - 1) - buf); // pBuf is pointing one past the part-separator, hence -1
+
 			const char* params = pBuf;
 			int paramsLen = bufsize - (params - buf);
 
-			// prepare the acknowledgment buffer in-place
-			char* pAck = (char*) buf + 2;
-			pAck[0] = 'P';
-			pAck[1] = DS_MESSAGE_PART_SEPERATOR;
-			pAck[2] = 'A';
-			uid[uidLen] = DS_MESSAGE_SEPERATOR;
-			int ackStrLen = params - pAck;
-			IO::send(pAck, ackStrLen, [](void*, size_t) {}); // send acknowledgment to server (and do nothing on completion)
-
-			// Make the actual RPC call to the provider
+			// prepare the RPC data-structure
 			_rpcCall rpcCall;
 			rpcCall.methodName = methodName;
 			rpcCall.nameLen = nameLen;
@@ -284,21 +272,13 @@ namespace DSCPP
 			rpcCall.uidLen = uidLen;
 			rpcCall.params = params;
 			rpcCall.paramsLen = paramsLen;
-			rpcCall.buf = buf;	//TODO: transfer the buffer ownership (content can not be modified, since the send() above might still in be progress)
-			rpcCall.bufLen = bufSize;
+			rpcCall.spbuf = spbuf.release();	// transfer ownership
+			rpcCall.bufLen = bufsize;
 
-			_rpcProvider* provider = m_Router.at(methodName, nameLen, nullptr);
-			if (provider == nullptr) return unknown_rpc_method(rpcCall);
+			// tell server that we are processing the rpc
+			send_rpc_call_acknowledgement(rpcCall);
 
-			_rpcCache* pCache = provider->cache();
-			if (pCache != nullptr)
-			{
-				// return a cached result, if exists
-				auto cacheId = pCache->find(params, paramsLen);
-				if (cacheId >= 0) return pCache->getResult(cacheId);
-			}
-
-			// cached result does not exist - make an actual call
+			// make an actual call
 			return (*provider->handler)(rpcCall);
 
 			return 0;
@@ -361,25 +341,23 @@ namespace DSCPP
 			}
 			return 0;
 		}
-		inline int send_rpc_call_acknowledgement(const char* szMethodName, const char* uid)
+		inline int send_rpc_call_acknowledgement(const _rpcCall& c)
 		{
 			char* buf = (char*)IO::alloc_send_buffer(SENDBUF_SIZE); // request buffer from the IO handler
-			int len = sprintf(buf, "A%cREQ%c{\"username\":\"%s\",\"password\":\"%s\"}%c", DS_MESSAGE_PART_SEPERATOR, DS_MESSAGE_PART_SEPERATOR, strUsername.c_str(), strPassword.c_str(), DS_MESSAGE_SEPERATOR);
+			int len = sprintf(buf, "P%cA%c%.*s%c%.*s%c", DS_MESSAGE_PART_SEPERATOR, DS_MESSAGE_PART_SEPERATOR, c.nameLen, c.methodName, DS_MESSAGE_PART_SEPERATOR, c.uidLen, c.uid, DS_MESSAGE_SEPERATOR);
 			return IO::send(buf, len); // let the IO handler do the send
 		}
 		inline int call_rpc(const char* szMethodName)
 		{
 
 		}
-		static int unknown_rpc_method(const _rpcCall& c)
+		inline int send_rpc_unsupported(unique_bufptr spReqbuf, int nPartSepIndex)
 		{
-			// we do not support the method the server is asking us to execute
-			char* buf = (char*)IO::alloc_send_buffer(SENDBUF_SIZE); // request buffer from the IO handler
-			int len = sprintf(buf, "P%cE%cNO_RPC_PROVIDER%c%*s%c%*s%c", DS_MESSAGE_PART_SEPERATOR, DS_MESSAGE_PART_SEPERATOR, DS_MESSAGE_PART_SEPERATOR, c.nameLen, c.methodName, DS_MESSAGE_PART_SEPERATOR, c.uidLen, c.uid, DS_MESSAGE_SEPERATOR);
-			return IO::send(buf, len);
-
-			fprintf(stderr, "\nUnknown RPC Method: [%*s]", c.nameLen, c.methodName);
-			return -1;
+			// we do not support the method the server is asking us to execute, lets reject it
+			char* rejBuf = (char*) spReqbuf.release();	// transfer the ownership 
+			rejBuf[4] = 'J';					// convert REQ -> REJ
+			rejBuf[nPartSepIndex] = DS_MESSAGE_SEPERATOR;
+			return IO::send(rejBuf, nPartSepIndex + 1); // rejBuf will be deleted after send is done, automatically
 		}
 	};
 	typedef _dsclientBase<> DSClientBase;
