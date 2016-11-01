@@ -123,12 +123,13 @@ void on_connect(uv_connect_t* connection, int status)
 
 	_dsclientUVDriver* pdscUV = (_dsclientUVDriver*)connection->data;
 
-	uv_stream_t* stream = connection->handle;	// this stream is nothing but the _dsclientUVDriver::m_socket
+	uv_stream_t* stream = connection->handle;	// this stream is same as the _dsclientUVDriver::m_socket
 	uv_stream_set_blocking(stream, false);
 	stream->data = pdscUV;
 
-	pdscUV->register_rpc_provider("echo", [](DSCPP::_rpcCall& sz) {
-		std::cerr << "echo called";
+	pdscUV->register_rpc_provider("echo", [](unique_ptr<DSCPP::_rpcCall> spCall, typename _dsclientUVDriver::TBase* pDSCBase) {
+		pDSCBase->send_rpc_call_result(*spCall.get(), "echo", 4);
+		//std::cerr << spCall->methodName << " called";
 		return 0;
 	});
 
@@ -140,7 +141,7 @@ void on_stream_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 {
 	if (nread >= 0)
 	{
-		std::cout << "\nread done: " << buf->base;
+		//std::cout << "\nread done: " << buf->base;
 		_dsclientUVDriver* pdscUV = (_dsclientUVDriver*) stream->data;
 		pdscUV->handle_server_directive(_dsclientUVDriver::unique_bufptr(buf->base), nread); // buf->base is allocated through alloc_cb(), will be owned by handle_server_directive()
 	}

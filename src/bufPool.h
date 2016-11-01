@@ -219,10 +219,10 @@ struct bufPool
 
 // unique_bufptr is useful for transferring ownership. Use it as function parameter (by value).
 // std::unique_ptr (at least on MSVC) takes additional memory to hold the deleter object, which is not required
-template<typename T = void, typename TGetType = char>
-struct unique_bufptr
+template<typename T = void>
+struct unique_ptr
 {
-	typedef unique_bufptr _Myt;
+	typedef unique_ptr _Myt;
 	typedef T* pointer;
 
 	template<typename objType>
@@ -236,22 +236,15 @@ struct unique_bufptr
 		inline static void _free(void* ptr) { POOLED_FREE(ptr); }
 	};
 
-	inline unique_bufptr(): pChunk(nullptr) { }
-	inline unique_bufptr(_Myt&& other) : pChunk(other.pChunk) { other.pChunk = nullptr; }
-	inline ~unique_bufptr() { reset(nullptr); }
-
 	inline explicit operator bool() const 	{	return pChunk != nullptr;	}
-	inline TGetType* get() const { return (TGetType*) pChunk; }
+	inline pointer get() const { return pChunk; }
 	inline pointer release() { pointer temp = pChunk; pChunk = nullptr; return temp; } // yield ownership of pointer
 	inline void reset(pointer ptr = nullptr) { if (pChunk != ptr) { deleter<T>::_free(pChunk);  pChunk = ptr; } } // release the pointer (and hold some other pointer)
 
 	inline _Myt& operator=(_Myt&& other) { assert(this != &other); reset(other.release()); return *this; }
 	inline _Myt& operator=(pointer ptr) { reset(ptr); return *this; }
 	inline bool operator!=(nullptr_t ptr) const { return pChunk != ptr; }
-
-	unique_bufptr(const _Myt&) = delete;
-	_Myt& operator=(const _Myt&) = delete;
-
+	inline pointer operator->() { return pChunk; }
 protected:
 	T* pChunk = nullptr;
 
@@ -268,13 +261,23 @@ public:
 		inline static bool isInUse(void* ptr) { return bufPoolChunk::getObject().isInUse(ptr); }
 	};
 #endif
-	inline explicit unique_bufptr(pointer ptr) : pChunk(ptr)
+	inline explicit unique_ptr(pointer ptr) : pChunk(ptr)
 	{
 #if BUFPOOL_TRACK_MEMORY 
 		// unique_bufptr can only deal with buffers that are allocated through one of bufPoolChunk or bufPoolT acquire() methods
 		assert(validator<T>::isInUse(ptr)); //  Failure here means ptr is some externally allocated buffer that we do not know how to deal with
 #endif
 	}
+	inline unique_ptr(_Myt&& other) : pChunk(other.pChunk)
+	{ 
+		other.pChunk = nullptr; 
+	}
+	inline ~unique_ptr()
+	{ 
+		reset(nullptr); 
+	}
+	unique_ptr(const _Myt&) = delete;
+	_Myt& operator=(const _Myt&) = delete;
 };
 
 #endif // !_BUFPOOL_H__CBA8E586_437B_491E_B3BC_2C039526D9FD__

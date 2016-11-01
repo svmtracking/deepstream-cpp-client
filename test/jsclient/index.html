@@ -17,9 +17,18 @@
       	if(success)
       	{
       		console.log("login successful", data);
-      		client.rpc.make('echo', { param: "hello world" }, (err, result) => {
-      			console.log("result: ", err, result);
-      		});
+          var answers = []; var count=1;
+          for(let i=0; i < 10000; ++i)
+          {
+            client.rpc.make('echo', { param: "hello world" }, (err, result) => {
+              //console.log("result: ", i, result);
+              if(err) console.log(i, err);
+              else 
+                answers[i] = result;
+
+              if(++count > 9998) console.log(answers);
+            });            
+          }
       	}
       	else
       	{

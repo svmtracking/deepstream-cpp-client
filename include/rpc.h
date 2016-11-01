@@ -12,7 +12,7 @@ namespace DSCPP
 {
 	struct _rpcCall
 	{
-		typedef unique_bufptr<void, char> unique_bufptr;
+		typedef unique_ptr<void> unique_bufptr;
 		const char*		methodName;	// points to the start of method name in the buf
 		int				nameLen;
 		const char*		uid;		// points to the start of uid in the buf
@@ -21,9 +21,9 @@ namespace DSCPP
 		int				paramsLen;
 		unique_bufptr	spbuf;		// the buffer received from server read (should not be modified in the RPC method)
 		size_t			bufLen;
+		inline _rpcCall(unique_bufptr&& buf): spbuf(std::forward<unique_bufptr>(buf)) { }
 	};
 
-	typedef int(*LPFNRPCMethod)(_rpcCall&);
 
 	enum RPC_RESULT_TYPE : short { RPC_SINGLE_RESULT = 0, RPC_PROGRESSIVE_RESULT, RPC_STREAMED_RESULT };
 
@@ -56,17 +56,17 @@ namespace DSCPP
 		}
 	};	
 
-	struct _rpcProvider
-	{
-		LPFNRPCMethod	handler;
+	//struct _rpcProvider
+	//{
+	//	LPFNRPCMethod	handler;
 
-		inline _rpcProvider(LPFNRPCMethod argHandler, bool bCache = true): handler(argHandler), pCache(bCache ? _NEW(_rpcCache) : nullptr) {}
-		~_rpcProvider() { _DELETE(pCache); }
-		
-		inline _rpcCache* cache() { return pCache; }
-	protected:
-		_rpcCache* pCache = nullptr;
-	};
+	//	inline _rpcProvider(LPFNRPCMethod argHandler, bool bCache = true): handler(argHandler), pCache(bCache ? _NEW(_rpcCache) : nullptr) {}
+	//	~_rpcProvider() { _DELETE(pCache); }
+	//	
+	//	inline _rpcCache* cache() { return pCache; }
+	//protected:
+	//	_rpcCache* pCache = nullptr;
+	//};
 
 } // namespace DSCPP
 
