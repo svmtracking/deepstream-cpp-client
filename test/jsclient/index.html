@@ -20,7 +20,7 @@
           var answers = []; var count=1;
           for(let i=0; i < 10000; ++i)
           {
-            client.rpc.make('echo', { param: "hello world" }, (err, result) => {
+            client.rpc.make('echo', "", (err, result) => {
               //console.log("result: ", i, result);
               if(err) console.log(i, err);
               else 

@@ -262,7 +262,7 @@ public:
 	template<>
 	struct validator<void>
 	{
-		inline static bool isInUse(void* ptr) { return bufPoolChunkObj.isInUse(ptr); }
+		inline static bool isInUse(void* ptr) { return bufPoolChunk::getObject().isInUse(ptr); }
 	};
 #endif
 	inline explicit unique_ptr(pointer ptr) : pChunk(ptr)

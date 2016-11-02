@@ -344,16 +344,28 @@ namespace DSCPP
 			return IO::send(buf, len); // let the IO handler do the send
 		}
 		public:
-		inline int send_rpc_call_result(_rpcCall& c, const char* szResult, int nLen)
+		inline int send_rpc_call_result(_rpcCall& c, const char* sResult, int nResultLen)
 		{
-			char* buf = (char*)c.spbuf.release();
-			buf[4] = 'S'; // convert REQ -> RES
-			char* result = (char*) c.params;
-			*result++ = 'S'; // string type follows
-			memcpy(result, szResult, nLen);
-			result[nLen] = DS_MESSAGE_SEPERATOR;
-			return IO::send(buf, result + nLen - buf + 1); // buf will be released after send
-
+			char* buf = nullptr;
+			int bufLen = 0;
+			if (c.paramsLen > (nResultLen+1)) // do we have enough space for in-place replacement of request buffer
+			{
+				// do in-place replacement
+				buf = (char*)c.spbuf.release();
+				buf[4] = 'S'; // convert REQ -> RES
+				char* result = (char*) c.params;
+				*result++ = 'S'; // string type follows
+				memcpy(result, sResult, nResultLen);
+				result[nResultLen] = DS_MESSAGE_SEPERATOR;
+				bufLen = result + nResultLen - buf + 1;
+			}
+			else
+			{
+				size_t allocSize = (nResultLen > SENDBUF_SIZE - 64) ? (nResultLen + 64) : SENDBUF_SIZE;
+				buf = (char*)IO::alloc_send_buffer(allocSize); // request buffer from the IO handler
+				bufLen = sprintf(buf, "P%cRES%c%.*s%c%.*s%cS%.*s%c", DS_MESSAGE_PART_SEPERATOR, DS_MESSAGE_PART_SEPERATOR, c.nameLen, c.methodName, DS_MESSAGE_PART_SEPERATOR, c.uidLen, c.uid, DS_MESSAGE_PART_SEPERATOR, nResultLen, sResult, DS_MESSAGE_SEPERATOR);
+			}
+			return IO::send(buf, bufLen); // buf will be released after send
 		}
 		inline int send_rpc_unsupported(unique_bufptr spReqbuf, int nPartSepIndex)
 		{
