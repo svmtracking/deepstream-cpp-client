@@ -146,14 +146,12 @@ namespace DSCPP
 				return handlerArray.prefixMatch(buf, size, results, MAX_DIRECTIVE_LEN, &_MyType::on_unknown);
 			}
 		};
-		_statehandlers&			m_stateHandlers;// the state handler methods
-		TRPCTrieArray&			m_Router;		// maps method_names -> method_handlers
+		static _statehandlers	s_stateHandlers;	// the state handler methods
+		TRPCTrieArray			m_rpcRouter;		// maps method_names -> method_handlers
 		int						m_nLoginRetryCount;
 		bool					m_bReadyForTransfer;	// indicates connected & successful auth state
 	public:
 		inline _dsclientBase() :
-			m_stateHandlers(_singleton<_statehandlers>::getObject()),
-			m_Router(_singleton<TRPCTrieArray>::getObject()),
 			m_nLoginRetryCount(0),
 			m_bReadyForTransfer(false)
 		{
@@ -166,7 +164,7 @@ namespace DSCPP
 
 		inline int handle_server_directive(unique_bufptr spbuf, size_t size)
 		{
-			auto handler = m_stateHandlers.getHandler((char*)spbuf.get(), size);
+			auto handler = s_stateHandlers.getHandler((char*)spbuf.get(), size);
 			return (this->*handler)(std::forward<unique_bufptr>(spbuf), size);
 		}
 
@@ -256,7 +254,7 @@ namespace DSCPP
 				return on_unknown(std::forward<unique_bufptr>(spbuf), bufsize);	// malformed RPC call, we do not respond
 
 			// reject if provider does not exist
-			LPFNRPCMethod rpcHandler = m_Router.at(methodName, nameLen, nullptr);
+			LPFNRPCMethod rpcHandler = m_rpcRouter.at(methodName, nameLen, nullptr);
 			 if (rpcHandler == nullptr)
 				 return send_rpc_unsupported(std::forward<unique_bufptr>(spbuf), (pBuf - 1) - buf); // pBuf is pointing one past the part-separator, hence -1
 
@@ -292,9 +290,9 @@ namespace DSCPP
 		{
 			int len = strlen(szMethodName);
 			if (len >= MAX_METHODNAME_LEN) return -1;
-			auto methodId = m_Router.findKey(szMethodName, len);
+			auto methodId = m_rpcRouter.findKey(szMethodName, len);
 			if (methodId >= 0) return -1; // already registered !!
-			methodId = m_Router.insertkv(szMethodName, len, handler);
+			methodId = m_rpcRouter.insertkv(szMethodName, len, handler);
 			if(is_ready_for_transfer())
 				return send_rpc_provider(szMethodName);
 			return 0;
@@ -303,11 +301,11 @@ namespace DSCPP
 		{
 			int len = strlen(szMethodName);
 			if (len >= MAX_METHODNAME_LEN) return -1;
-			auto methodId = m_Router.findKey(szMethodName, len);
+			auto methodId = m_rpcRouter.findKey(szMethodName, len);
 			if (methodId >= 0) // unregister, only if registered
 			{
-				_DELETE(m_Router[methodId]);
-				m_Router.updateValue(methodId, nullptr);
+				_DELETE(m_rpcRouter[methodId]);
+				m_rpcRouter.updateValue(methodId, nullptr);
 				if(is_ready_for_transfer())
 					return send_rpc_unprovide(szMethodName);
 			}
@@ -328,8 +326,8 @@ namespace DSCPP
 		}
 		inline int send_rpc_providers()
 		{
-			TRPCTrieArray::iterator iter = m_Router.begin();
-			TRPCTrieArray::iterator iterEnd = m_Router.end();
+			TRPCTrieArray::iterator iter = m_rpcRouter.begin();
+			TRPCTrieArray::iterator iterEnd = m_rpcRouter.end();
 			while (iter != iterEnd)
 			{
 				char methodName[MAX_METHODNAME_LEN];
@@ -367,6 +365,12 @@ namespace DSCPP
 		}
 	};
 	typedef _dsclientBase<> DSClientBase;
+
+	// These could be defined as singletons but C++11 singletons are unnecessarily complex, emitting 
+	// 20+ instructions (that involve TLS locking). Not worth it.
+	// Simple global variables could solve the same problem more effectively any day, if one knows 
+	// how to use them correctly.
+	template<typename TIO, typename TCred> typename _dsclientBase<TIO, TCred>::_statehandlers _dsclientBase<TIO, TCred>::s_stateHandlers;
 } // name-space DSCPP
 
 #endif // !_DSCPPCLIENT_H_A29CB5C0_020E_407F_B75C_BD91967B6EE8_

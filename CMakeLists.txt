@@ -64,7 +64,9 @@ SET(DSCPPClient_HEADERS
 	${CMAKE_CURRENT_SOURCE_DIR}/include/dsclientbase.h
 	${CMAKE_CURRENT_SOURCE_DIR}/include/rpc.h	)
 SET(DSCPPClient_SOURCES 
-	${SrcDir}/libuv-network.cpp)
+	${SrcDir}/libuv-network.cpp
+	${SrcDir}/singletons.cpp	
+	)
 
 ADD_LIBRARY(dscppclient STATIC ${DSCPPClient_HEADERS} ${DSCPPClient_SOURCES})
 

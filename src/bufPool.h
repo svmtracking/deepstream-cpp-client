@@ -20,9 +20,8 @@ template<typename T>
 struct bufPoolT
 {
 protected:
-	inline bufPoolT()
-	{
-	}
+	static bufPoolT s_obj;
+	inline bufPoolT() {	}
 	inline ~bufPoolT()
 	{
 #if BUFPOOL_TRACK_MEMORY
@@ -36,8 +35,7 @@ protected:
 public:
 	static inline bufPoolT& getObject()
 	{
-		static bufPoolT obj;
-		return obj;
+		return s_obj;
 	}
 public:
 	template<class... Args>
@@ -85,6 +83,7 @@ protected:
 	std::deque<T*> inuseQ;
 #endif
 };
+template<typename T> bufPoolT<T> bufPoolT<T>::s_obj;
 
 #define PAGE_ROUND_DOWN(x, PAGE_SIZE)	((x) & (~(PAGE_SIZE-1)))
 #define PAGE_ROUND_UP(x, PAGE_SIZE)		( ((x) + PAGE_SIZE-1)  & (~(PAGE_SIZE-1)) )
@@ -104,9 +103,7 @@ protected:
 struct bufPoolChunk
 {
 protected:
-	inline bufPoolChunk()
-	{
-	}
+	inline bufPoolChunk() {	}
 	inline ~bufPoolChunk()
 	{
 #if BUFPOOL_TRACK_MEMORY
@@ -123,11 +120,17 @@ protected:
 	{
 		return PAGE_ROUND_UP(size, PAGE_SIZE_1K);
 	}
+	// we use this bufPoolChunk_singleton template class for two reasons:
+	// 1. function based static initialized singletons are costly in C++14 (TLS based syncs)
+	// 2. class-based static variables are cheaper, but they need to be defined in a CPP file.
+	//    No point in maintaining a whole CPP file just for a static variable. Static vars
+	//    in a template-class can be defined directly in the header. So, we take that shortcut.
+	template<typename T>
+	struct bufPoolChunk_singleton { static bufPoolChunk s_obj; };
 public:
 	static inline bufPoolChunk& getObject()
 	{
-		static bufPoolChunk obj;
-		return obj;
+		return bufPoolChunk_singleton<void>::s_obj;
 	}
 	inline void* acquire(int size)
 	{
@@ -184,12 +187,13 @@ public:
 	}
 #endif
 protected:
-	typedef std::deque<void*> TQueue;
+	typedef std::deque<void*> TQueue; //TODO: std::dequeue may not be thread-safe. Checkout any high-performance fast-inert/remove containers that are thread-safe.
 	std::map<size_t, TQueue> freeQ;
 #if BUFPOOL_TRACK_MEMORY
 	std::map<size_t, TQueue> inuseQ;
 #endif
-}; //TODO: std::dequeue may not be thread-safe. Checkout any high-performance fast-inert/remove containers that are thread-safe.
+};
+template<typename T> bufPoolChunk bufPoolChunk::bufPoolChunk_singleton<T>::s_obj;
 
 struct bufPool
 {
@@ -212,9 +216,9 @@ struct bufPool
 #define _NEW3(type, arg1, arg2, arg3)			bufPoolT<type>::getObject().acquire(arg1, arg2, arg3)
 #define _NEW4(type, arg1, arg2, arg3, arg4)		bufPoolT<type>::getObject().acquire(arg1, arg2, arg3, arg4)
 
-#define POOLED_ALLOC(size)			bufPoolChunk::getObject().acquire(size)
-#define POOLED_FREE(ptr)			bufPoolChunk::getObject().release(ptr)
-#define POOLED_ALLOCATED_SIZE(ptr)	bufPoolChunk::getObject().allocatedSize(ptr)
+#define POOLED_ALLOC(size)						bufPoolChunk::getObject().acquire(size)
+#define POOLED_FREE(ptr)						bufPoolChunk::getObject().release(ptr)
+#define POOLED_ALLOCATED_SIZE(ptr)				bufPoolChunk::getObject().allocatedSize(ptr)
 
 
 // unique_bufptr is useful for transferring ownership. Use it as function parameter (by value).
@@ -258,7 +262,7 @@ public:
 	template<>
 	struct validator<void>
 	{
-		inline static bool isInUse(void* ptr) { return bufPoolChunk::getObject().isInUse(ptr); }
+		inline static bool isInUse(void* ptr) { return bufPoolChunkObj.isInUse(ptr); }
 	};
 #endif
 	inline explicit unique_ptr(pointer ptr) : pChunk(ptr)
