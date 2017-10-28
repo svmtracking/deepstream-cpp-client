@@ -18,4 +18,4 @@ Coming soon: WIP
 This software is licensed under Apache 2.0 license without any warranties of what so ever. Use at your own discretion.
 
 ## Copyright
-<p align="right">&copy; 2016. <a href="http://cenacleresearch.com" title="Cenacle Research">Cenacle Research</a>. All rights reserved.</p>
+<p align="right">&copy; 2016. <a href="https://cenacle.company/" title="Cenacle">Cenacle</a>. All rights reserved.</p>
